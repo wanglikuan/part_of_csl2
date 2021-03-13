@@ -241,52 +241,7 @@ def ewc_train(model: nn.Module, labels: list, optimizer: torch.optim, data_loade
         optimizer.step()
     return epoch_loss / len(data_loader)
 
-def our_train(model: nn.Module, labels: list, optimizer: torch.optim, data_loader: torch.utils.data.DataLoader, ewcs: list, lam: float, gpu: torch.device, cut_idx, threshold):
-    model.train()
-    model.apply(set_bn_eval) #冻结BN及其统计数据
-    epoch_loss = 0
-    for data, target in data_loader:
-        data, target = Variable(data).cuda(gpu), Variable(target).cuda(gpu)
-        optimizer.zero_grad()
-        output = model(data)
-        # for idx in range(output.size(1)):
-        #     if idx not in labels:
-        #         output[range(len(output)), idx] = 0
-        # criterion = nn.CrossEntropyLoss()
-        # loss = criterion(output, target) 
-        loss = myloss(output, target, labels)
-        # server_update = (loss.item() > threshold)
-        # print('loss:', loss.item())
-        for ewc in ewcs:
-            loss += (lam / 2) * ewc.penalty(model)
-            # print('ewc loss:', loss.item())
-        server_update = (loss.item() > threshold)
-        epoch_loss += loss.item()
-        loss.backward()
-
-        if server_update:
-            optimizer.step()
-        else:
-            for group in optimizer.param_groups:
-                for idx, p in enumerate(group['params']):
-                    if (idx < cut_idx) and (p.grad is not None):
-                        d_p = p.grad.data
-                        p.data.add_(-group['lr'], d_p)
-    return epoch_loss / len(data_loader)
-
-# Implemented by Xiaosong Ma 
-# def our_train(model: nn.Module, labels: list, optimizer: torch.optim, data_loader: torch.utils.data.DataLoader, ewcs: list, lam: float, gpu: torch.device, cut_idx, if_freeze):
-
-#     #还需要进行loss判断，true：freeze
-#     #---------------------freeze
-#     # if if_freeze == 1 :
-#     #     for idx, param in enumerate(model.parameters()):
-#     #         if idx >= cut_idx:
-#     #             continue
-#     #         param.requires_grad = False
-
-#     #     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args_lr) # no need to add: lr=0.1?
-#     #----------------------
+# def our_train(model: nn.Module, labels: list, optimizer: torch.optim, data_loader: torch.utils.data.DataLoader, ewcs: list, lam: float, gpu: torch.device, cut_idx, threshold):
 #     model.train()
 #     model.apply(set_bn_eval) #冻结BN及其统计数据
 #     epoch_loss = 0
@@ -299,49 +254,94 @@ def our_train(model: nn.Module, labels: list, optimizer: torch.optim, data_loade
 #         #         output[range(len(output)), idx] = 0
 #         # criterion = nn.CrossEntropyLoss()
 #         # loss = criterion(output, target) 
-#         loss = myloss(output, target, labels)        
+#         loss = myloss(output, target, labels)
+#         # server_update = (loss.item() > threshold)
 #         # print('loss:', loss.item())
 #         for ewc in ewcs:
 #             loss += (lam / 2) * ewc.penalty(model)
 #             # print('ewc loss:', loss.item())
+#         server_update = (loss.item() > threshold)
 #         epoch_loss += loss.item()
-
 #         loss.backward()
-#         countskip = 0
-#         countall = 0
-#         #------根据if_freeze，决定是否冻结server----------------------------------------------
-#         if if_freeze == 1 :
-#             #----------------重写step---------------------           
+
+#         if server_update:
+#             optimizer.step()
+#         else:
 #             for group in optimizer.param_groups:
 #                 for idx, p in enumerate(group['params']):
-#                     countall += 1
-#                     if idx >= cut_idx: #冻结server，即跳过cut_idx ~ end
-#                         countskip += 1
-#                         #print('skip_server_layer')
-#                         continue                    
-#                     if p.grad is None:
-#                         continue
-#                     d_p = p.grad
-#                     #p.add_(d_p, alpha=-group['lr'])
-#                     p.data = p.data - d_p*group['lr']
-#             print("countskip:",countskip,"countall:",countall)
-#         else:
-#             optimizer.step()
-#         #----------------------------------------------------
-#         #optimizer.step()   #optimizer.param_groups : 'params' : .grad ==> 梯度 
-#                            #91行
-#                            #for n, p in model.named_parameters():
-#                            #    p.grad.data ==> 当前网络层梯度数据？
-#     #-----------------------------解冻
-#     # if if_freeze == 1 :    
-#     #     for idx, param in enumerate(model.parameters()):
-#     #         if idx >= cut_idx:
-#     #             continue
-#     #         param.requires_grad = True
-
-#     #     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args_lr) # no need to add: lr=0.1?
-#     #-------------------------------
+#                     if (idx < cut_idx) and (p.grad is not None):
+#                         d_p = p.grad.data
+#                         p.data.add_(-group['lr'], d_p)
 #     return epoch_loss / len(data_loader)
+
+# Implemented by Xiaosong Ma 
+def our_train(model: nn.Module, labels: list, optimizer: torch.optim, data_loader: torch.utils.data.DataLoader, ewcs: list, lam: float, gpu: torch.device, cut_idx, if_freeze):
+
+    #还需要进行loss判断，true：freeze
+    #---------------------freeze
+    # if if_freeze == 1 :
+    #     for idx, param in enumerate(model.parameters()):
+    #         if idx >= cut_idx:
+    #             continue
+    #         param.requires_grad = False
+
+    #     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args_lr) # no need to add: lr=0.1?
+    #----------------------
+    model.train()
+    model.apply(set_bn_eval) #冻结BN及其统计数据
+    epoch_loss = 0
+    for data, target in data_loader:
+        data, target = Variable(data).cuda(gpu), Variable(target).cuda(gpu)
+        optimizer.zero_grad()
+        output = model(data)
+        # for idx in range(output.size(1)):
+        #     if idx not in labels:
+        #         output[range(len(output)), idx] = 0
+        # criterion = nn.CrossEntropyLoss()
+        # loss = criterion(output, target) 
+        loss = myloss(output, target, labels)        
+        # print('loss:', loss.item())
+        for ewc in ewcs:
+            loss += (lam / 2) * ewc.penalty(model)
+            # print('ewc loss:', loss.item())
+        epoch_loss += loss.item()
+
+        loss.backward()
+        countskip = 0
+        countall = 0
+        #------根据if_freeze，决定是否冻结server----------------------------------------------
+        if if_freeze == 1 :
+            #----------------重写step---------------------           
+            for group in optimizer.param_groups:
+                for idx, p in enumerate(group['params']):
+                    countall += 1
+                    if idx >= cut_idx: #冻结server，即跳过cut_idx ~ end
+                        countskip += 1
+                        #print('skip_server_layer')
+                        continue                    
+                    if p.grad is None:
+                        continue
+                    d_p = p.grad
+                    #p.add_(d_p, alpha=-group['lr'])
+                    p.data = p.data - d_p*group['lr']
+            print("countskip:",countskip,"countall:",countall)
+        else:
+            optimizer.step()
+        #----------------------------------------------------
+        #optimizer.step()   #optimizer.param_groups : 'params' : .grad ==> 梯度 
+                           #91行
+                           #for n, p in model.named_parameters():
+                           #    p.grad.data ==> 当前网络层梯度数据？
+    #-----------------------------解冻
+    # if if_freeze == 1 :    
+    #     for idx, param in enumerate(model.parameters()):
+    #         if idx >= cut_idx:
+    #             continue
+    #         param.requires_grad = True
+
+    #     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args_lr) # no need to add: lr=0.1?
+    #-------------------------------
+    return epoch_loss / len(data_loader)
 
 def test_model(model, labels, test_data, gpu):
     correct, total = 0, 0

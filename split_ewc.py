@@ -24,7 +24,7 @@ parser.add_argument('--bsz', type=int, default=128)
 parser.add_argument('--num-task', type=int, default=5)
 parser.add_argument('--first-lr', type=float, default=1e-3)
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--iterations', type=int, default=50)
+parser.add_argument('--iterations', type=int, default=100)
 parser.add_argument('--lam', type=float, default=15)
 parser.add_argument('--num-gpu', type=int, default=1)
 
@@ -252,7 +252,7 @@ def our_process(train_loader, test_loader, labels, class_incremental, online=Fal
     optimizers = [optim.SGD(params=models[idx].parameters(), lr=args.lr) for idx in range(args.num_task)]
 
     ewcs = []
-    # if_freeze, freeze_stat = 0, 0
+    if_freeze, freeze_stat = 0, 0
     loss = 10
     for task in range(args.num_task):
         print('Training Task {}... Labels: {}'.format(task, labels[task]))
@@ -281,19 +281,19 @@ def our_process(train_loader, test_loader, labels, class_incremental, online=Fal
             cur_label = cur_label + labels[task] if class_incremental else labels[task]
             for iteration in range(args.iterations):
                 if online:
-                    loss = our_train(model, cur_label, optimizer, train_loader[task], ewcs[-1:], args.lam, gpu, cut_idx, args.threshold) #与normal_train相比多了ewcs[]与args.lam
-                    # loss = our_train(model, cur_label, optimizer, train_loader[task], ewcs[-1:], args.lam, gpu, cut_idx, if_freeze) #与normal_train相比多了ewcs[]与args.lam
+                    #loss = our_train(model, cur_label, optimizer, train_loader[task], ewcs[-1:], args.lam, gpu, cut_idx, args.threshold) #与normal_train相比多了ewcs[]与args.lam
+                    loss = our_train(model, cur_label, optimizer, train_loader[task], ewcs[-1:], args.lam, gpu, cut_idx, if_freeze) #与normal_train相比多了ewcs[]与args.lam
                 else:
                     loss = our_train(model, cur_label, optimizer, train_loader[task], ewcs, args.lam, gpu, cut_idx, args.threshold) #与online区别是ewcs[-1:]为ewcs只取最后一个元素构成的列表
                     # loss = our_train(model, cur_label, optimizer, train_loader[task], ewcs, args.lam, gpu, cut_idx, if_freeze) #与online区别是ewcs[-1:]为ewcs只取最后一个元素构成的列表
                 #判断loss，loss若小于阈值，令变量if_freeze=1,传入下次our_train
                 #our_train相比于ewc_train多两个参数：if_freeze和cut_idx
-                # if loss < args.threshold:
-                #     if_freeze = 1
-                # else:
-                #     if_freeze = 0
-                print('Iteration: {}\tLoss:{}'.format(iteration, loss))
-                # print('Iteration: {}\tLoss:{}\tif freeze:{}'.format(iteration, loss, if_freeze))
+                if loss < args.threshold:
+                    if_freeze = 1
+                else:
+                    if_freeze = 0
+                #print('Iteration: {}\tLoss:{}'.format(iteration, loss))
+                print('Iteration: {}\tLoss:{}\tif freeze:{}'.format(iteration, loss, if_freeze))
                 for sub_task in range(task + 1): #循环不同model
                     temp_model = copy.deepcopy(models[sub_task])
                     temp_model = models_copy(temp_model, model, cut_idx) #temp_model 用的是当前model后半部分，models[]前半部分
