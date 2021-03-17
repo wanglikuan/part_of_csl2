@@ -22,13 +22,13 @@ parser.add_argument('--dataset', type=str, default='permuted')
 parser.add_argument('--split', type=int, default=3)
 parser.add_argument('--bsz', type=int, default=128)
 parser.add_argument('--num-task', type=int, default=5)
-parser.add_argument('--first-lr', type=float, default=1e-3)
-parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--iterations', type=int, default=100)
+parser.add_argument('--first-lr', type=float, default=1e-2)
+parser.add_argument('--lr', type=float, default=1e-2)
+parser.add_argument('--iterations', type=int, default=1000)
 parser.add_argument('--lam', type=float, default=15)
 parser.add_argument('--num-gpu', type=int, default=1)
 
-parser.add_argument('--threshold', type=float, default=0.2) #
+parser.add_argument('--threshold', type=float, default=0.4) #
 parser.add_argument('--FirstThreshold', type=float, default=0.4) #
 
 args = parser.parse_args()
@@ -38,8 +38,8 @@ def model_retrieval():
         return {
             'ResNet18': cifar.ResNet18(100),
             'VGG': cifar.vgg16(100),
-            'LeNet': cifar.LeNet(100),
-            'CNN': cifar.CNN(100),
+            #'LeNet': cifar.LeNet(100),
+            #'CNN': cifar.CNN(100),
             'AlexNet': cifar.AlexNet(100)
         }[args.model]
     return {
@@ -57,7 +57,9 @@ def layer_size(shape):
     return ans
 
 def generate_cut_layer(cut_layer_idx, model):
-    input_datasize = (1, 28, 28)  # Mnist dataset 
+    #input_datasize = (1, 28, 28)  # Mnist dataset
+    input_datasize = (3, 32, 32)  # cifar 
+    #cut_layer_idx = min(cut_layer_idx, len(summary(model, input_datasize, depth=1, verbose=0).summary_list))
     cut_layer_idx = min(cut_layer_idx, len(summary(model, input_datasize, depth=1, verbose=0).summary_list))
     # print(summary(model, input_datasize, depth=1, verbose=0))
 
@@ -149,7 +151,7 @@ def standard_process(train_loader, test_loader, labels, class_incremental, resul
                         f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(task, iteration, loss, sub_task, i, acc))
             if iteration % 20 == 0:
                 for param_group in optimizer.param_groups:
-                    param_group['lr'] *= 0.8
+                    param_group['lr'] *= 0.95
 
 def ewc_process_without_split(train_loader, test_loader, labels, class_incremental, online=False, result_file='./ewc_without_split.txt'):
     gpu = torch.device('cuda:0')
@@ -171,7 +173,7 @@ def ewc_process_without_split(train_loader, test_loader, labels, class_increment
                     f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(task, iteration, loss, task, task, acc))
                 if iteration % 20 == 0:
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] *= 0.8
+                        param_group['lr'] *= 0.95
         else:
             cur_label = cur_label + labels[task] if class_incremental else labels[task]
             for param_group in optimizer.param_groups:
@@ -191,7 +193,7 @@ def ewc_process_without_split(train_loader, test_loader, labels, class_increment
                         f.write('{}\t{}\t{}\t{}\t{}\n'.format(task, iteration, loss, sub_task, acc))
                 if iteration % 20 == 0:
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] *= 0.8
+                        param_group['lr'] *= 0.95
         ewcs.append(EWC(model, train_loader[task], gpu))
 
 def ewc_process(train_loader, test_loader, labels, class_incremental, online=False, result_file='./ewc.txt'):
@@ -219,7 +221,7 @@ def ewc_process(train_loader, test_loader, labels, class_incremental, online=Fal
                     f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(task, iteration, loss, task, task, acc))
                 if iteration % 20 == 0:
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] *= 0.8
+                        param_group['lr'] *= 0.95
         else:
             cur_label = cur_label + labels[task] if class_incremental else labels[task]
             for iteration in range(args.iterations):
@@ -240,7 +242,7 @@ def ewc_process(train_loader, test_loader, labels, class_incremental, online=Fal
                             f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(task, iteration, loss, sub_task, i, acc))
                 if iteration % 20 == 0:
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] *= 0.8
+                        param_group['lr'] *= 0.95
         ewcs.append(splitEWC(model, train_loader[task], cut_idx, gpu))
 
 def our_process(train_loader, test_loader, labels, class_incremental, online=False, result_file='./our_process.txt'):
@@ -276,7 +278,7 @@ def our_process(train_loader, test_loader, labels, class_incremental, online=Fal
                     f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(task, iteration, loss, task, task, acc))
                 if iteration % 20 == 0:
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] *= 0.8
+                        param_group['lr'] *= 0.95
         else:
             cur_label = cur_label + labels[task] if class_incremental else labels[task]
             for iteration in range(args.iterations):
@@ -306,7 +308,7 @@ def our_process(train_loader, test_loader, labels, class_incremental, online=Fal
                             f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(task, iteration, loss, sub_task, i, acc))
                 if iteration % 20 == 0:
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] *= 0.8
+                        param_group['lr'] *= 0.95
         ewcs.append(splitEWC(model, train_loader[task], cut_idx, gpu))
 
 
@@ -322,12 +324,12 @@ if __name__ == '__main__':
         train_loader, test_loader, labels = get_split_cifar(args.bsz, args.num_task)
 
     if args.method == 'ewc':
-        ewc_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
+        ewc_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/2095_t10_{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
     elif args.method == 'online':
-        ewc_process(train_loader, test_loader, labels, 'class' in args.dataset, True, result_file='./result/{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
+        ewc_process(train_loader, test_loader, labels, 'class' in args.dataset, True, result_file='./result/2095_t10_{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
     elif args.method == 'split_free':
-        ewc_process_without_split(train_loader, test_loader, labels, 'class' in args.dataset, False, result_file='./result/{}_{}.txt'.format(args.method, args.dataset))
+        ewc_process_without_split(train_loader, test_loader, labels, 'class' in args.dataset, False, result_file='./result/2095_t10_{}_{}.txt'.format(args.method, args.dataset))
     elif args.method == 'ours':
-        our_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/{}_{}_{}_{}_{}.txt'.format(args.method, args.dataset, args.split, args.FirstThreshold, args.threshold))
+        our_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/2095_t10_{}_{}_{}_{}_{}.txt'.format(args.method, args.dataset, args.split, args.FirstThreshold, args.threshold))
     else:
-        standard_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
+        standard_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/2095_tt10_{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
