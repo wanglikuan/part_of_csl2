@@ -332,4 +332,4 @@ if __name__ == '__main__':
     elif args.method == 'ours':
         our_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/2095_t10_{}_{}_{}_{}_{}.txt'.format(args.method, args.dataset, args.split, args.FirstThreshold, args.threshold))
     else:
-        standard_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/2095_tt10_{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
+        standard_process(train_loader, test_loader, labels, 'class' in args.dataset, result_file='./result/2095_t10_i100_lr0.05_{}_{}_{}.txt'.format(args.method, args.dataset, args.split))
